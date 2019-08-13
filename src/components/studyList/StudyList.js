@@ -10,6 +10,8 @@ import { StudyListLoadingText } from './StudyListLoadingText.js';
 import { StudylistToolbar } from './StudyListToolbar.js';
 import { isInclusivelyBeforeDay } from 'react-dates';
 import moment from 'moment';
+import debounce from 'lodash.debounce';
+import { withTranslation } from '../../utils/LanguageProvider';
 
 const today = moment();
 const lastWeek = moment().subtract(7, 'day');
@@ -91,15 +93,25 @@ class StudyList extends Component {
     };
 
     this.getChangeHandler = this.getChangeHandler.bind(this);
+    this.getBlurHandler = this.getBlurHandler.bind(this);
     this.onInputKeydown = this.onInputKeydown.bind(this);
     this.nextPage = this.nextPage.bind(this);
     this.prevPage = this.prevPage.bind(this);
     this.onRowsPerPageChange = this.onRowsPerPageChange.bind(this);
+    this.delayedSearch = debounce(this.search, 250);
   }
 
   getChangeHandler(key) {
     return event => {
-      this.setSearchData(key, event.target.value);
+      this.delayedSearch.cancel();
+      this.setSearchData(key, event.target.value, this.delayedSearch);
+    };
+  }
+
+  getBlurHandler(key) {
+    return event => {
+      this.delayedSearch.cancel();
+      this.setSearchData(key, event.target.value, this.search);
     };
   }
 
@@ -124,6 +136,7 @@ class StudyList extends Component {
       event.preventDefault();
       event.stopPropagation();
 
+      this.delayedSearch.cancel();
       // reset the page because user is doing a new search
       this.setSearchData('currentPage', 0, this.search);
     }
@@ -167,15 +180,18 @@ class StudyList extends Component {
 
   nextPage(currentPage) {
     currentPage = currentPage + 1;
+    this.delayedSearch.cancel();
     this.setSearchData('currentPage', currentPage, this.search);
   }
 
   prevPage(currentPage) {
     currentPage = currentPage - 1;
+    this.delayedSearch.cancel();
     this.setSearchData('currentPage', currentPage, this.search);
   }
 
   onRowsPerPageChange(rowsPerPage) {
+    this.delayedSearch.cancel();
     this.setSearchDataBatch({ rowsPerPage, currentPage: 0 }, this.search);
   }
 
@@ -196,6 +212,7 @@ class StudyList extends Component {
         order = 'asc';
       }
 
+      this.delayedSearch.cancel();
       this.setSearchData('sortData', { field, order }, this.search);
     };
   }
@@ -225,7 +242,7 @@ class StudyList extends Component {
         }}
       >
         <td className={study.patientName ? 'patientName' : 'emptyCell'}>
-          {study.patientName || '(empty)'}
+          {study.patientName || `(${this.props.t('Empty')})`}
         </td>
 
         <td className="patientId">{study.patientId}</td>
@@ -240,28 +257,28 @@ class StudyList extends Component {
   render() {
     const tableMeta = {
       patientName: {
-        displayText: 'Patient Name',
+        displayText: this.props.t('PatientName'),
         sort: 0,
       },
       patientId: {
-        displayText: 'MRN',
+        displayText: this.props.t('MRN'),
         sort: 0,
       },
       accessionNumber: {
-        displayText: 'Accession #',
+        displayText: this.props.t('AccessionNumber'),
         sort: 0,
       },
       studyDate: {
-        displayText: 'Study Date',
+        displayText: this.props.t('StudyDate'),
         inputType: 'date-range',
         sort: 0,
       },
       modalities: {
-        displayText: 'Modality',
+        displayText: this.props.t('Modality'),
         sort: 0,
       },
       studyDescription: {
-        displayText: 'Description',
+        displayText: this.props.t('StudyDescription'),
         sort: 0,
       },
     };
@@ -281,18 +298,16 @@ class StudyList extends Component {
     return (
       <div className="StudyList">
         <div className="studyListToolbar clearfix">
-          <div className="header pull-left">Study List</div>
+          <div className="header pull-left">{this.props.t('StudyList')}</div>
           <div className="studyCount pull-right">
             {this.props.studies.length}
           </div>
           <div className="pull-right">
-            {
-              <StudylistToolbar
-                studyListFunctionsEnabled={this.props.studyListFunctionsEnabled}
-                onImport={this.props.onImport}
-              />
-            }
+            {this.props.studyListFunctionsEnabled ? (
+              <StudylistToolbar onImport={this.props.onImport} />
+            ) : null}
           </div>
+          {this.props.children}
         </div>
         <div className="theadBackground" />
         <div id="studyListContainer">
@@ -324,6 +339,7 @@ class StudyList extends Component {
                             value={this.state[fieldName]}
                             onKeyDown={this.onInputKeydown}
                             onChange={this.getChangeHandler(fieldName)}
+                            onBlur={this.getBlurHandler(fieldName)}
                           />
                         )}
                         {field.inputType === 'date-range' && (
@@ -408,4 +424,5 @@ class StudyList extends Component {
   }
 }
 
-export { StudyList };
+const connectedComponent = withTranslation('StudyList')(StudyList);
+export { connectedComponent as StudyList };
